@@ -1,0 +1,50 @@
+// https://leetcode.com/problems/minimum-window-substring/
+class Solution {
+    public String minWindow(String s, String t) {
+        
+        if(s.length() < t.length()) return "";
+
+        int[] freq = new int[128];
+        for(char ch : t.toCharArray()){
+            freq[ch]++;
+        }
+
+        int count = t.length();
+        int minLength = Integer.MAX_VALUE;
+
+        int left = 0;
+        int right = 0;
+        int start = 0;
+
+        while(right < s.length()){
+            char ch = s.charAt(right);
+
+            if(freq[ch] > 0){
+                count--;
+            }
+
+            freq[ch]--;
+            right++;
+            
+            while(count == 0){
+                if(right - left < minLength){
+                    start = left;
+                    minLength = right - left;
+                }
+                char l = s.charAt(left);
+                freq[l]++;
+
+                if(freq[l] > 0){
+                    count++;
+                }
+
+                left++;
+            }
+
+            
+        }
+
+        return minLength == Integer.MAX_VALUE ? "" : s.substring(start,start+minLength);
+
+    }
+}
