@@ -1,0 +1,158 @@
+✅ Reusable template (covers 80% problems)
+🧠 4–5 sliding window patterns (THIS is the real intuition)
+🎯 How to identify which pattern to use in interview
+🚀 1. UNIVERSAL SLIDING WINDOW TEMPLATE
+🔹 A. Fixed Window (like your problem)
+
+Use when:
+
+window size is fixed (like permutation / anagram)
+
+int[] need = new int[26];
+int[] window = new int[26];
+
+// fill need
+for (char c : s1.toCharArray()) {
+    need[c - 'a']++;
+}
+
+// initial window
+for (int i = 0; i < k; i++) {
+    window[s2.charAt(i) - 'a']++;
+}
+
+// check initial match
+int matches = 0;
+for (int i = 0; i < 26; i++) {
+    if (need[i] == window[i]) matches++;
+}
+
+int left = 0;
+
+for (int right = k; right < s2.length(); right++) {
+
+    if (matches == 26) return true;
+
+    // ➕ add
+    int r = s2.charAt(right) - 'a';
+    window[r]++;
+    if (window[r] == need[r]) matches++;
+    else if (window[r] == need[r] + 1) matches--;
+
+    // ➖ remove
+    int l = s2.charAt(left) - 'a';
+    window[l]--;
+    if (window[l] == need[l]) matches++;
+    else if (window[l] == need[l] - 1) matches--;
+
+    left++;
+}
+
+return matches == 26;
+🔹 B. Variable Window (most common)
+
+Use when:
+
+“longest/shortest substring” with condition
+
+int left = 0;
+
+for (int right = 0; right < n; right++) {
+
+    // expand window
+    add(s[right]);
+
+    while (window invalid) {
+        remove(s[left]);
+        left++;
+    }
+
+    // update answer
+    updateAns();
+}
+🧠 2. ONLY 5 TYPES OF SLIDING WINDOW (MASTER THIS)
+
+This is GOLD. Everything fits into these.
+
+🔥 TYPE 1: Fixed Size Window
+
+👉 size = k
+
+Examples:
+
+Permutation in string
+Max sum subarray of size k
+
+Pattern:
+
+expand → shrink immediately
+🔥 TYPE 2: Longest Valid Substring
+
+👉 maximize length
+
+Examples:
+
+Longest substring without repeating chars
+At most K distinct chars
+
+Pattern:
+
+expand → shrink until valid → update max
+🔥 TYPE 3: Shortest Valid Substring
+
+👉 minimize length
+
+Examples:
+
+Minimum window substring
+
+Pattern:
+
+expand → once valid → shrink as much as possible
+🔥 TYPE 4: Count Subarrays
+
+👉 count how many valid windows
+
+Examples:
+
+Subarrays with sum ≤ k
+Nice subarrays
+
+Pattern:
+
+count += (right - left + 1)
+🔥 TYPE 5: Exact Match (Your Case)
+
+👉 frequency match
+
+Examples:
+
+Anagrams
+Permutation in string
+
+Pattern:
+
+frequency + matches tracking
+🎯 3. HOW TO IDENTIFY IN INTERVIEW
+
+Ask yourself:
+
+❓ Q1: Is window size fixed?
+YES → Type 1 or Type 5
+❓ Q2: Is it longest/shortest?
+Longest → Type 2
+Shortest → Type 3
+❓ Q3: Is it counting number of subarrays?
+YES → Type 4
+❓ Q4: Is it frequency/permutation?
+YES → Type 5 (your current problem)
+🧠 BUILD INTUITION (THIS IS KEY)
+
+Instead of memorizing code, think:
+
+🔥 Sliding Window = Controlled Expansion + Correction
+RIGHT pointer → explore
+LEFT pointer → fix mistakes
+⚖️ Mental Model
+Expand → “Let’s try including this”
+Shrink → “Oops, invalid → fix it”
