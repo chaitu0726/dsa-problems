@@ -1,0 +1,6 @@
+Subarray + sum → prefix sum
+Substring + condition → sliding window
+Pair lookup → hashmap
+Sorted pair → two pointers
+Frequency → hashmap / bucket
+Top K → heap / bucket
