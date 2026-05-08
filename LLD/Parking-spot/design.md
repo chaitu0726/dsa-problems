@@ -56,9 +56,9 @@ Dynamic pricing?
 without changing existing code much?
 ```
 ## Step-by-Step Thought Process
-```
-Step 1: Identify Core Entities
 
+## Step 1: Identify Core Entities
+```
 For Parking Lot:
 
 Entity	Responsibility
@@ -79,7 +79,9 @@ ParkingLot
 Vehicle -> assigned Spot
 Vehicle -> Ticket
 Exit -> Payment
-Step 3: Use Inheritance Smartly
+```
+## Step 3: Use Inheritance Smartly
+```
 Vehicle Hierarchy
 Vehicle
  ├── Car
