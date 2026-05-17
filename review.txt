@@ -1,0 +1,538 @@
+1. JAVA (Highest ROI Topics)
+MUST KNOW
+1. HashMap internals
+
+Most asked Java question.
+
+Know:
+
+bucket
+collisions
+chaining
+treeification
+resize
+load factor
+equals/hashCode
+
+Typical follow-up:
+“What happens if hashCode is bad?”
+
+2. equals() vs hashCode()
+
+Very common.
+
+Know contract:
+
+equal objects → same hashCode
+hash collisions allowed
+3. ConcurrentHashMap
+
+Know:
+
+thread safety
+CAS
+locking
+why faster than synchronizedMap
+4. synchronized vs volatile
+
+VERY important.
+
+Know:
+
+visibility
+atomicity
+ordering
+5. Thread lifecycle
+
+States:
+NEW → RUNNABLE → BLOCKED/WAITING → TERMINATED
+
+Know:
+
+start() vs run()
+why thread cannot restart
+6. ExecutorService + Thread Pools
+
+Know:
+
+fixed pool
+cached pool
+queue
+rejection policy
+
+Follow-up:
+“How tune for production?”
+
+7. CompletableFuture
+
+Extremely common now.
+
+Know:
+
+supplyAsync
+thenApply
+thenCompose
+exception handling
+parallel API calls
+8. Deadlock
+
+Must explain:
+
+causes
+prevention
+ordering locks
+9. Immutable class
+
+Common LLD question.
+
+10. Java Memory Model basics
+
+Know:
+
+heap
+stack
+visibility
+happens-before
+2. SPRING BOOT (VERY HIGH ROI)
+
+This is probably your MOST important section.
+
+MUST KNOW
+1. Spring Bean Lifecycle
+
+Know:
+
+IOC container
+bean creation
+dependency injection
+2. Filter vs Interceptor vs AOP
+
+MOST ASKED Spring question.
+
+Know:
+
+request lifecycle
+use cases
+3. @Transactional
+
+VERY IMPORTANT.
+
+Know:
+
+propagation
+isolation
+rollback
+self invocation issue
+4. Spring Security + JWT
+
+Must know:
+
+authentication
+authorization
+access token
+refresh token
+5. REST API Best Practices
+
+Know:
+
+idempotency
+pagination
+versioning
+status codes
+6. Exception Handling
+
+Know:
+
+@ControllerAdvice
+global exception handling
+7. Caching
+
+Must know:
+
+Redis
+cache invalidation
+TTL
+cache-aside
+8. JPA/Hibernate Internals
+
+Know:
+
+lazy vs eager
+N+1
+first-level cache
+transactions
+9. Optimizing Slow APIs
+
+VERY common.
+
+Know:
+
+indexing
+pagination
+batching
+caching
+async
+10. Microservices Basics
+
+Know:
+
+service discovery
+API gateway
+circuit breaker
+distributed tracing
+3. JAVASCRIPT (Most Asked)
+MUST KNOW
+1. Event Loop
+
+MOST ASKED JS question.
+
+Know:
+
+call stack
+microtask queue
+macrotask queue
+2. var vs let vs const
+3. Closures
+
+Must explain with practical examples.
+
+4. Promise vs async-await
+
+Know:
+
+async flow
+error handling
+5. Debounce vs Throttle
+
+VERY common frontend interview question.
+
+6. this keyword
+
+Know:
+
+arrow functions
+bind/call/apply
+7. == vs ===
+8. Hoisting
+9. Promise.all()
+
+Know:
+
+failure behavior
+parallel execution
+10. Browser Rendering
+
+Know:
+
+DOM
+reflow
+repaint
+4. ANGULAR (Most Important Topics)
+MUST KNOW
+1. Angular Lifecycle Hooks
+
+Know:
+
+ngOnInit
+ngOnDestroy
+ngOnChanges
+2. Change Detection
+
+MOST IMPORTANT Angular topic.
+
+Know:
+
+default
+OnPush
+immutability
+3. RxJS
+
+VERY VERY IMPORTANT.
+
+Know:
+
+Observable
+Subject
+BehaviorSubject
+switchMap
+mergeMap
+concatMap
+4. Lazy Loading
+5. Services + Dependency Injection
+6. trackBy
+
+Very common optimization question.
+
+7. State Management
+
+Know:
+
+services
+NgRx basics
+8. Interceptors
+
+Very commonly asked.
+
+9. Route Guards
+10. Angular Performance Optimization
+
+Know:
+
+virtual scrolling
+lazy loading
+memoization
+5. DSA (What Actually Matters for 6+ YOE)
+
+You do NOT need CP-level DSA.
+
+Focus on:
+
+medium problems
+communication
+optimization
+MUST KNOW PATTERNS
+Arrays + HashMap
+
+Most important category.
+
+Questions:
+
+Two Sum
+Top K Frequent
+Group Anagrams
+Longest Consecutive Sequence
+Sliding Window
+
+VERY common.
+
+Questions:
+
+Longest substring without repeating
+Max sum subarray
+Binary Search
+
+Know:
+
+rotated array
+search space problems
+Heap
+
+VERY high ROI.
+
+Questions:
+
+Kth largest
+top K frequent
+merge K lists
+Linked List
+
+Must know:
+
+reverse list
+cycle detection
+LRU Cache
+Stack
+
+Questions:
+
+valid parenthesis
+monotonic stack basics
+Trees
+
+Must know:
+
+BFS
+DFS
+level order
+diameter
+LCA basics
+Graphs
+
+Know:
+
+BFS
+DFS
+topological sort
+Backtracking
+
+Questions:
+
+subsets
+permutations
+generate parenthesis
+DP (Only Important Ones)
+
+Know:
+
+climbing stairs
+house robber
+LIS
+knapsack intuition
+6. LLD (High ROI)
+MUST KNOW QUESTIONS
+1. Parking Lot
+
+THE classic.
+
+2. Elevator System
+
+Very common.
+
+3. Splitwise
+4. Notification System
+5. Logger Framework
+6. Tic Tac Toe
+
+Asked surprisingly often.
+
+Concepts They Check
+OOP
+SOLID
+extensibility
+design patterns
+clean code
+MOST IMPORTANT DESIGN PATTERNS
+
+Only focus these:
+
+Pattern	Importance
+Strategy	VERY HIGH
+Factory	VERY HIGH
+Observer	HIGH
+Singleton	HIGH
+Builder	MEDIUM
+SOLID PRINCIPLES
+
+MUST know examples.
+
+Especially:
+
+SRP
+OCP
+Dependency inversion
+7. HLD (Most Important Topics)
+
+You only need 6–7 systems deeply.
+
+MUST PREPARE
+1. URL Shortener
+
+Covers:
+
+DB
+cache
+scaling
+2. Twitter Feed
+
+MOST IMPORTANT.
+
+Covers:
+
+fanout
+caching
+pagination
+3. Notification System
+
+VERY common.
+
+4. Chat System
+
+Covers:
+
+WebSockets
+ordering
+scaling
+5. File Upload Service
+
+Covers:
+
+chunk upload
+CDN
+async processing
+6. Payment System
+
+Important for fintech.
+
+HLD Concepts You MUST Know
+1. Caching
+
+MOST IMPORTANT SYSTEM DESIGN TOPIC.
+
+Know:
+
+Redis
+cache-aside
+write-through
+write-back
+invalidation
+2. Load Balancer
+3. SQL vs NoSQL
+
+VERY commonly asked.
+
+4. Database Indexing
+
+CRITICAL.
+
+5. Partitioning + Sharding
+6. Replication
+7. Kafka Basics
+
+VERY HIGH ROI now.
+
+Know:
+
+producer
+consumer
+partition
+ordering
+8. API Gateway
+9. CDN
+10. CAP Theorem
+8. Behavioral (Underrated)
+
+This matters MUCH more at 6+ YOE.
+
+MUST PREPARE STORIES
+1. Production issue
+2. Conflict with teammate
+3. Scalability challenge
+4. Technical debt decision
+5. Mentoring junior
+6. Ambiguous requirement
+FINAL PRIORITY ORDER FOR YOU
+
+If time limited:
+
+Priority	Topic
+1	Spring Boot
+2	HLD
+3	Java concurrency
+4	DSA patterns
+5	Caching + DB
+6	Angular + RxJS
+7	LLD
+MOST ASKED QUESTIONS ACROSS ALL INTERVIEWS
+
+If I had to reduce EVERYTHING to top questions:
+
+HashMap internals
+Filter vs Interceptor
+@Transactional
+Event loop
+Change detection
+Redis caching strategy
+Design Twitter Feed
+SQL vs NoSQL
+Thread safety
+CompletableFuture
+Rate limiter
+API design best practices
+LRU Cache
+Debounce vs throttle
+Deadlock
+Kafka basics
+DB indexing
+Microservices communication
+Production issue handled
+Scalability challenge solved
