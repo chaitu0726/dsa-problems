@@ -1,186 +1,232 @@
-# System Design: Upload File / Large Files
+# Low Level Design: Large File Upload System
 
-# 1. Problem Statement
+# 1. Goal
 
-Design a scalable system that allows users to:
+Design LLD for a scalable large file upload system supporting:
 
-* Upload files (small + large)
-* Resume interrupted uploads
-* Upload files in parallel chunks
-* Track upload progress
-* Store files reliably
-* Download files efficiently
-* Handle millions of uploads
+* Multipart uploads
+* Parallel chunk upload
+* Resume upload
+* Retry failed chunks
+* Upload tracking
+* Final file merge
+* Download support
 
-Examples:
+Focus:
 
-* Google Drive
-* Dropbox
-* OneDrive
-* S3 Multipart Upload
+* Classes
+* APIs
+* DB schema
+* Object models
+* Internal workflow
+* Concurrency
+* Failure handling
 
 ---
 
-# 2. Functional Requirements
+# 2. Core Requirements
 
-## Core Features
+## Functional
 
-* Upload files
-* Upload very large files (GBs)
+* Upload large files
 * Pause/resume upload
 * Retry failed chunks
-* Download files
-* Delete files
-* View upload progress
-* Share file link
+* Parallel upload
+* Complete upload
+* Download file
+* Delete file
 
-## Non Functional Requirements
+## Non Functional
 
-* Highly scalable
+* Scalable
+* Reliable
 * Fault tolerant
-* Durable storage
-* Low latency
-* High throughput
-* Secure
-* Efficient bandwidth usage
+* Durable
+* Stateless services
 
 ---
 
-# 3. High Level Architecture
+# 3. High Level Component View
 
 ```text
-                +----------------+
-                |    Client App  |
-                +--------+-------+
-                         |
-                         v
-                +----------------+
-                | API Gateway    |
-                +--------+-------+
-                         |
-        +-------------------------------+
-        |                               |
-        v                               v
-+---------------+              +----------------+
-| Upload Service|              | Auth Service   |
-+-------+-------+              +----------------+
-        |
-        |
-        v
-+---------------------+
-| Metadata DB         |
-| (Postgres/MySQL)    |
-+---------------------+
-        |
-        v
-+---------------------+
-| Object Storage      |
-| (S3/GCS/HDFS)       |
-+---------------------+
-        |
-        v
-+---------------------+
-| CDN                 |
-+---------------------+
++----------------------+
+| Client               |
++----------+-----------+
+           |
+           v
++----------------------+
+| API Gateway          |
++----------+-----------+
+           |
+           v
++----------------------+
+| Upload Controller    |
++----------+-----------+
+           |
+           v
++----------------------+
+| Upload Service       |
++----------+-----------+
+     |            |
+     v            v
++---------+   +-------------+
+| Redis   |   | Metadata DB |
++---------+   +-------------+
+     |
+     v
++----------------------+
+| Object Storage (S3)  |
++----------------------+
 ```
 
 ---
 
-# 4. Why Object Storage?
+# 4. Main Entities
 
-Large files should NOT be stored inside relational DB.
+# File Entity
 
-Use:
-
-* Amazon S3
-* Google Cloud Storage
-* Azure Blob
-* HDFS
-
-Because object storage provides:
-
-* High durability
-* Infinite scalability
-* Cheap storage
-* Multipart upload support
-* CDN integration
-
----
-
-# 5. Simple Upload Flow
-
-## Step-by-step
-
-```text
-Client -> Upload API -> Object Storage
-                       -> Metadata DB
+```java
+class FileMetadata {
+    Long fileId;
+    Long userId;
+    String fileName;
+    Long fileSize;
+    String contentType;
+    String storagePath;
+    FileStatus status;
+    LocalDateTime createdAt;
+}
 ```
 
-### Flow
-
-1. User selects file
-2. Client sends upload request
-3. Server authenticates user
-4. Server generates upload ID
-5. File uploaded to storage
-6. Metadata stored in DB
-7. Upload completed response returned
-
 ---
 
-# 6. Problem With Large Files
+# Upload Session Entity
 
-Uploading huge files directly causes:
-
-* Network failures
-* Restart from beginning
-* Memory pressure
-* Timeout issues
-* Slow uploads
-
-Solution:
-
-# Multipart / Chunk Upload
-
----
-
-# 7. Chunk Upload Design
-
-Instead of uploading one huge file:
-
-```text
-5 GB file
--> split into 5 MB chunks
--> upload chunks independently
+```java
+class UploadSession {
+    String uploadId;
+    Long fileId;
+    int totalChunks;
+    long uploadedBytes;
+    UploadStatus status;
+    LocalDateTime createdAt;
+}
 ```
 
-Example:
+---
 
-```text
-Chunk 1
-Chunk 2
-Chunk 3
-Chunk 4
-...
+# Chunk Metadata Entity
+
+```java
+class ChunkMetadata {
+    Long id;
+    String uploadId;
+    Integer chunkNumber;
+    Long chunkSize;
+    String etag;
+    ChunkStatus status;
+}
 ```
-
-Benefits:
-
-* Retry only failed chunk
-* Parallel uploads
-* Resume support
-* Faster upload
 
 ---
 
-# 8. Chunk Upload Workflow
+# 5. Enums
 
-## Step 1: Initiate Upload
+```java
+enum FileStatus {
+    UPLOADING,
+    ACTIVE,
+    FAILED,
+    DELETED
+}
+```
 
-Client calls:
+```java
+enum UploadStatus {
+    INITIATED,
+    IN_PROGRESS,
+    COMPLETED,
+    FAILED
+}
+```
+
+```java
+enum ChunkStatus {
+    PENDING,
+    UPLOADED,
+    FAILED
+}
+```
+
+---
+
+# 6. Database Schema
+
+# FILE_METADATA
+
+```sql
+CREATE TABLE file_metadata (
+    file_id BIGINT PRIMARY KEY,
+    user_id BIGINT,
+    file_name VARCHAR(255),
+    file_size BIGINT,
+    content_type VARCHAR(100),
+    storage_path VARCHAR(500),
+    status VARCHAR(20),
+    created_at TIMESTAMP
+);
+```
+
+---
+
+# UPLOAD_SESSION
+
+```sql
+CREATE TABLE upload_session (
+    upload_id VARCHAR(100) PRIMARY KEY,
+    file_id BIGINT,
+    total_chunks INT,
+    uploaded_bytes BIGINT,
+    status VARCHAR(20),
+    created_at TIMESTAMP
+);
+```
+
+---
+
+# CHUNK_METADATA
+
+```sql
+CREATE TABLE chunk_metadata (
+    id BIGINT PRIMARY KEY,
+    upload_id VARCHAR(100),
+    chunk_number INT,
+    chunk_size BIGINT,
+    etag VARCHAR(255),
+    status VARCHAR(20),
+
+    UNIQUE(upload_id, chunk_number)
+);
+```
+
+---
+
+# 7. API Design
+
+# Initiate Upload
 
 ```http
-POST /upload/initiate
+POST /uploads/initiate
+```
+
+Request:
+
+```json
+{
+  "fileName": "movie.mp4",
+  "fileSize": 1000000000,
+  "contentType": "video/mp4"
+}
 ```
 
 Response:
@@ -188,618 +234,746 @@ Response:
 ```json
 {
   "uploadId": "u123",
-  "chunkSize": "5MB"
+  "chunkSize": 5242880,
+  "totalChunks": 200
 }
 ```
 
-DB entry:
-
-```text
-uploadId | fileName | totalChunks | status
-```
-
 ---
 
-## Step 2: Upload Chunks
-
-Client uploads chunks independently.
+# Upload Chunk
 
 ```http
-PUT /upload/chunk
+PUT /uploads/{uploadId}/chunks/{chunkNumber}
 ```
 
-Payload:
+Headers:
 
 ```text
-uploadId
-chunkNumber
-chunkData
-```
-
-Storage path:
-
-```text
-/uploads/u123/chunk-1
-/uploads/u123/chunk-2
-```
-
----
-
-## Step 3: Track Uploaded Chunks
-
-Use Redis or DB.
-
-Example:
-
-```text
-uploadId -> [1,2,3,5]
-```
-
-Meaning:
-Chunk 4 missing.
-
----
-
-## Step 4: Complete Upload
-
-Client calls:
-
-```http
-POST /upload/complete
-```
-
-Server:
-
-* Verifies all chunks exist
-* Merges chunks
-* Creates final object
-* Updates metadata DB
-
----
-
-# 9. Parallel Uploads
-
-Huge optimization.
-
-Instead of:
-
-```text
-Chunk1 -> Chunk2 -> Chunk3
-```
-
-Use:
-
-```text
-Chunk1
-Chunk2
-Chunk3
-Chunk4
-(all parallel)
-```
-
-Benefits:
-
-* Better bandwidth usage
-* Faster uploads
-* Better UX
-
-Usually client uploads:
-
-* 4–10 chunks concurrently
-
----
-
-# 10. Resume Upload
-
-If internet disconnects:
-
-Client asks:
-
-```http
-GET /upload/status/{uploadId}
+Content-Type: application/octet-stream
 ```
 
 Response:
 
 ```json
 {
-  "uploadedChunks": [1,2,3,4,7]
+  "etag": "etag123"
+}
+```
+
+---
+
+# Upload Status
+
+```http
+GET /uploads/{uploadId}/status
+```
+
+Response:
+
+```json
+{
+  "uploadedChunks": [1,2,3,4],
+  "remainingChunks": [5,6]
+}
+```
+
+---
+
+# Complete Upload
+
+```http
+POST /uploads/{uploadId}/complete
+```
+
+Response:
+
+```json
+{
+  "fileId": 101,
+  "status": "ACTIVE"
+}
+```
+
+---
+
+# Download File
+
+```http
+GET /files/{fileId}
+```
+
+---
+
+# 8. Controller Layer
+
+```java
+@RestController
+class UploadController {
+
+    private UploadService uploadService;
+
+    @PostMapping("/uploads/initiate")
+    UploadInitiateResponse initiateUpload(
+            @RequestBody UploadInitiateRequest request) {
+
+        return uploadService.initiateUpload(request);
+    }
+
+    @PutMapping("/uploads/{uploadId}/chunks/{chunkNumber}")
+    UploadChunkResponse uploadChunk(
+            @PathVariable String uploadId,
+            @PathVariable Integer chunkNumber,
+            InputStream chunkData) {
+
+        return uploadService.uploadChunk(uploadId,
+                                         chunkNumber,
+                                         chunkData);
+    }
+}
+```
+
+---
+
+# 9. Service Layer
+
+```java
+interface UploadService {
+
+    UploadInitiateResponse initiateUpload(
+            UploadInitiateRequest request);
+
+    UploadChunkResponse uploadChunk(
+            String uploadId,
+            Integer chunkNumber,
+            InputStream chunkData);
+
+    UploadStatusResponse getStatus(String uploadId);
+
+    CompleteUploadResponse completeUpload(String uploadId);
+}
+```
+
+---
+
+# 10. Upload Service Implementation
+
+```java
+class UploadServiceImpl implements UploadService {
+
+    private StorageService storageService;
+    private UploadRepository uploadRepository;
+    private ChunkRepository chunkRepository;
+    private RedisTemplate redisTemplate;
+
+    @Override
+    public UploadInitiateResponse initiateUpload(
+            UploadInitiateRequest request) {
+
+        String uploadId = UUID.randomUUID().toString();
+
+        int totalChunks = calculateChunks(request.getFileSize());
+
+        UploadSession session = new UploadSession();
+        session.setUploadId(uploadId);
+        session.setTotalChunks(totalChunks);
+        session.setStatus(UploadStatus.INITIATED);
+
+        uploadRepository.save(session);
+
+        return new UploadInitiateResponse(uploadId,
+                                          CHUNK_SIZE,
+                                          totalChunks);
+    }
+}
+```
+
+---
+
+# 11. Chunk Upload Logic
+
+```java
+@Override
+public UploadChunkResponse uploadChunk(
+        String uploadId,
+        Integer chunkNumber,
+        InputStream chunkData) {
+
+    validateUpload(uploadId);
+
+    String etag = storageService.uploadChunk(
+            uploadId,
+            chunkNumber,
+            chunkData);
+
+    ChunkMetadata chunk = new ChunkMetadata();
+    chunk.setUploadId(uploadId);
+    chunk.setChunkNumber(chunkNumber);
+    chunk.setEtag(etag);
+    chunk.setStatus(ChunkStatus.UPLOADED);
+
+    chunkRepository.save(chunk);
+
+    redisTemplate.opsForSet()
+                 .add(uploadId,
+                      chunkNumber.toString());
+
+    return new UploadChunkResponse(etag);
+}
+```
+
+---
+
+# 12. Storage Service
+
+```java
+interface StorageService {
+
+    String uploadChunk(
+            String uploadId,
+            Integer chunkNumber,
+            InputStream data);
+
+    void completeMultipartUpload(
+            String uploadId);
+
+    URL generatePresignedUrl(
+            String uploadId,
+            Integer chunkNumber);
+}
+```
+
+---
+
+# 13. S3 Storage Implementation
+
+```java
+class S3StorageService implements StorageService {
+
+    private AmazonS3 s3Client;
+
+    @Override
+    public String uploadChunk(
+            String uploadId,
+            Integer chunkNumber,
+            InputStream data) {
+
+        String key = uploadId + "/chunk-" + chunkNumber;
+
+        PutObjectResult result = s3Client.putObject(
+                BUCKET_NAME,
+                key,
+                data,
+                new ObjectMetadata());
+
+        return result.getETag();
+    }
+}
+```
+
+---
+
+# 14. Resume Upload Logic
+
+Client reconnects.
+
+```http
+GET /uploads/{uploadId}/status
+```
+
+Server checks:
+
+```text
+Redis
+or
+ChunkMetadata table
+```
+
+Response:
+
+```json
+{
+  "uploadedChunks": [1,2,3]
 }
 ```
 
 Client uploads only missing chunks.
 
-This is extremely common interview topic.
-
 ---
 
-# 11. Presigned URL Optimization
+# 15. Parallel Upload Design
 
-Important real-world optimization.
-
-Without optimization:
-
-```text
-Client -> Backend -> Storage
-```
-
-Backend becomes bottleneck.
-
-Better:
-
-```text
-Client -> Backend (get signed URL)
-Client -> S3 directly
-```
-
-Flow:
-
-```text
-1. Client requests upload URL
-2. Backend generates signed URL
-3. Client uploads directly to S3
-4. Backend stores metadata
-```
-
-Benefits:
-
-* Backend CPU reduced
-* Backend bandwidth reduced
-* Massive scalability improvement
-
----
-
-# 12. Metadata Database Design
-
-## File Table
-
-```sql
-File(
-  file_id,
-  user_id,
-  file_name,
-  size,
-  content_type,
-  storage_path,
-  created_at,
-  status
-)
-```
-
-## Upload Table
-
-```sql
-Upload(
-  upload_id,
-  file_id,
-  total_chunks,
-  uploaded_chunks,
-  status
-)
-```
-
----
-
-# 13. Why Redis?
-
-Redis used for:
-
-* Upload progress
-* Chunk tracking
-* Temporary metadata
-* Rate limiting
-
-Reason:
-
-* Very fast
-* In-memory
-* Auto expiration
+Frontend uploads chunks concurrently.
 
 Example:
 
 ```text
-upload:u123 -> bitmap of uploaded chunks
+Thread1 -> Chunk1
+Thread2 -> Chunk2
+Thread3 -> Chunk3
+```
+
+Backend remains stateless.
+
+Each chunk request independent.
+
+---
+
+# 16. Redis Design
+
+# Track Uploaded Chunks
+
+```text
+KEY:
+upload:u123
+
+VALUE:
+SET(1,2,3,4)
 ```
 
 ---
 
-# 14. File Merge Strategy
-
-Two approaches:
-
-## Approach 1: Server Merge
+# Track Upload Progress
 
 ```text
-Server downloads chunks
--> merges
--> uploads final file
+KEY:
+progress:u123
+
+VALUE:
+80%
+```
+
+---
+
+# 17. Complete Upload Flow
+
+```java
+@Override
+public CompleteUploadResponse completeUpload(
+        String uploadId) {
+
+    UploadSession session = uploadRepository
+            .findById(uploadId)
+            .orElseThrow();
+
+    int uploadedChunks = chunkRepository
+            .countUploadedChunks(uploadId);
+
+    if (uploadedChunks != session.getTotalChunks()) {
+        throw new RuntimeException("Missing chunks");
+    }
+
+    storageService.completeMultipartUpload(uploadId);
+
+    session.setStatus(UploadStatus.COMPLETED);
+
+    uploadRepository.save(session);
+
+    return new CompleteUploadResponse();
+}
+```
+
+---
+
+# 18. Retry Mechanism
+
+If chunk upload fails:
+
+```text
+Retry only failed chunk.
+```
+
+Frontend retry policy:
+
+```text
+Retry 3 times
+Exponential backoff
+```
+
+Example:
+
+```text
+1s
+2s
+4s
+```
+
+---
+
+# 19. Idempotency
+
+Very important.
+
+Same chunk may upload twice.
+
+Prevent duplicates using:
+
+```sql
+UNIQUE(upload_id, chunk_number)
+```
+
+If duplicate:
+
+* Ignore
+  or
+* Replace existing chunk
+
+---
+
+# 20. Presigned URL Optimization
+
+Instead of:
+
+```text
+Client -> Backend -> S3
+```
+
+Use:
+
+```text
+Client -> S3 directly
+```
+
+Backend only generates signed URL.
+
+---
+
+# Generate Presigned URL
+
+```java
+URL generatePresignedUrl(
+        String uploadId,
+        Integer chunkNumber) {
+
+    Date expiration = new Date(
+            System.currentTimeMillis() + 600000);
+
+    return s3Client.generatePresignedUrl(
+            BUCKET_NAME,
+            uploadId + "/chunk-" + chunkNumber,
+            expiration,
+            HttpMethod.PUT);
+}
+```
+
+---
+
+# 21. Concurrency Handling
+
+Multiple chunks uploaded simultaneously.
+
+Need thread-safe updates.
+
+Approaches:
+
+## Optimistic Locking
+
+```text
+version column
+```
+
+## Atomic Redis Operations
+
+```text
+SADD upload:u123 5
+```
+
+---
+
+# 22. File Merge Strategies
+
+# Bad Approach
+
+```text
+Download chunks
+Merge locally
+Upload final file
 ```
 
 Problem:
 
-* Heavy CPU
-* Heavy network
+* Huge network cost
+* Huge CPU usage
 
 ---
 
-## Approach 2: Storage Native Multipart Merge
+# Good Approach
 
-S3 supports:
+Use S3 multipart completion.
 
 ```text
-CompleteMultipartUpload
+S3 internally merges chunks.
 ```
-
-Storage combines chunks internally.
-
-Best approach.
 
 ---
 
-# 15. Upload Progress Tracking
+# 23. Download Flow
 
-Frontend calculates:
+## Download API
 
-```text
-uploadedBytes / totalBytes
+```http
+GET /files/{id}
 ```
 
-Example:
+Server returns:
 
 ```text
-250MB / 1GB = 25%
+Presigned download URL
 ```
 
-Progress update mechanisms:
+or
 
-* Polling
-* WebSocket
-* SSE
-
-Usually polling sufficient.
+```text
+CDN URL
+```
 
 ---
 
-# 16. Scalability
-
-## Horizontal Scaling
-
-Upload service should be stateless.
-
-```text
-        Load Balancer
-             |
-   ---------------------
-   |         |         |
-Upload1   Upload2   Upload3
-```
-
-Because uploads stored in:
-
-* S3
-* Redis
-* DB
-
-Any instance can continue upload.
-
----
-
-# 17. CDN For Downloads
-
-Downloads served via CDN.
-
-```text
-User -> CDN -> Storage
-```
-
-Benefits:
-
-* Faster downloads
-* Reduced origin load
-* Global caching
-
-Examples:
-
-* CloudFront
-* Cloudflare
-* Akamai
-
----
-
-# 18. Security
+# 24. Security
 
 ## Authentication
 
-Use:
-
-* JWT
-* OAuth
+JWT token.
 
 ## Authorization
 
 Verify:
 
 ```text
-user owns file?
+Does file belong to user?
 ```
 
-## Virus Scanning
+## Virus Scan
 
 After upload:
 
 ```text
-Upload -> Queue -> Virus Scanner
+Kafka Event
+ -> Virus Scanner
+ -> Update status
 ```
-
-## Encryption
-
-* HTTPS in transit
-* S3 encryption at rest
 
 ---
 
-# 19. Rate Limiting
+# 25. Validation
 
-Prevent abuse.
+## Validate File Size
 
-Use:
+```text
+Reject > max size
+```
 
-* API Gateway
-* Redis token bucket
+## Validate Content Type
+
+```text
+Only allowed MIME types
+```
+
+## Validate Chunk Order
+
+```text
+chunkNumber <= totalChunks
+```
+
+---
+
+# 26. Cleanup Job
+
+Scheduled cleanup.
+
+Delete:
+
+```text
+Expired uploads
+Unused chunks
+Failed sessions
+```
 
 Example:
 
 ```text
-100 uploads/min/user
+Uploads inactive for 24 hours
 ```
 
 ---
 
-# 20. Handling Failures
-
-## Chunk Upload Failure
-
-Retry only failed chunk.
-
-## Service Crash
-
-State persisted in Redis/DB.
-
-## Duplicate Chunk
-
-Use:
-
-```text
-(uploadId, chunkNumber)
-```
-
-as unique key.
-
----
-
-# 21. File Deduplication
-
-Optimization asked in interviews.
-
-Client computes:
-
-```text
-SHA-256 hash
-```
-
-If file already exists:
-
-```text
-Don't upload again.
-Reuse existing storage object.
-```
-
-Used by:
-
-* Dropbox
-* Google Drive
-
----
-
-# 22. Compression
-
-Optional optimization.
-
-Compress:
-
-* Images
-* Logs
-* Text files
-
-Do NOT compress:
-
-* MP4
-* ZIP
-* JPEG
-
-(already compressed)
-
----
-
-# 23. Async Processing
-
-After upload:
+# 27. Async Event Flow
 
 ```text
 Upload Complete
       |
       v
- Kafka / SQS Queue
+ Kafka Topic
       |
-      +--> Virus Scan
-      +--> Thumbnail Generation
-      +--> Metadata Extraction
-      +--> OCR
+      +--> Thumbnail Service
+      +--> OCR Service
+      +--> Virus Scanner
+      +--> Metadata Extractor
 ```
 
 ---
 
-# 24. APIs
+# 28. Repository Layer
 
-## Initiate Upload
+```java
+interface UploadRepository {
 
-```http
-POST /upload/initiate
-```
+    void save(UploadSession session);
 
-## Upload Chunk
-
-```http
-PUT /upload/chunk
-```
-
-## Upload Status
-
-```http
-GET /upload/status/{id}
-```
-
-## Complete Upload
-
-```http
-POST /upload/complete
-```
-
-## Download File
-
-```http
-GET /files/{id}
+    Optional<UploadSession> findById(String uploadId);
+}
 ```
 
 ---
 
-# 25. Bottlenecks
+```java
+interface ChunkRepository {
 
-## Backend Bandwidth
+    void save(ChunkMetadata metadata);
 
-Solution:
+    int countUploadedChunks(String uploadId);
 
-* Direct S3 upload
-
-## DB Writes
-
-Solution:
-
-* Redis buffering
-* Batch writes
-
-## Large Merge Operations
-
-Solution:
-
-* Storage-native multipart merge
+    List<Integer> getUploadedChunks(String uploadId);
+}
+```
 
 ---
 
-# 26. Interview Deep Dive Questions
+# 29. Failure Handling
 
-## Why Chunk Upload?
+## Server Crash
 
-* Resume support
+No problem.
+
+State stored in:
+
+* Redis
+* DB
+* S3
+
+Service stateless.
+
+---
+
+## Network Failure
+
+Retry failed chunks.
+
+---
+
+## Duplicate Requests
+
+Handled using:
+
+```text
+(uploadId, chunkNumber)
+```
+
+---
+
+# 30. Scalability
+
+Upload service horizontally scalable.
+
+```text
+             Load Balancer
+                    |
+      --------------------------------
+      |              |              |
+ Upload-1       Upload-2       Upload-3
+```
+
+No sticky sessions required.
+
+Because state externalized.
+
+---
+
+# 31. Sequence Diagram
+
+```text
+Client -> API : initiate upload
+API -> DB : create upload session
+API -> Client : uploadId
+
+Client -> S3 : upload chunk1
+Client -> S3 : upload chunk2
+Client -> S3 : upload chunk3
+
+Client -> API : complete upload
+API -> S3 : complete multipart upload
+API -> DB : mark completed
+API -> Client : success
+```
+
+---
+
+# 32. Important Interview Topics
+
+Always discuss:
+
+* Chunk upload
+* Resume upload
+* Presigned URLs
+* Retry mechanism
+* Idempotency
+* Parallel uploads
+* Redis tracking
+* Stateless services
+* Multipart merge
+* CDN downloads
+
+---
+
+# 33. Common Interview Follow-ups
+
+## Why not store file in DB?
+
+* Expensive
+* Slow
+* Bad scalability
+
+---
+
+## Why chunk upload?
+
 * Retry support
-* Parallelism
-* Better reliability
+* Resume support
+* Faster upload
 
-## Why Presigned URLs?
+---
+
+## Why presigned URLs?
 
 * Backend scalability
 * Lower bandwidth cost
-* Reduced CPU usage
+
+---
 
 ## Why Redis?
 
-* Fast progress tracking
+* Fast upload tracking
 * Ephemeral state
 
-## SQL or NoSQL?
-
-* SQL for metadata consistency
-* Object storage for binary data
-
 ---
 
-# 27. Tradeoffs
-
-| Choice             | Pros            | Cons                   |
-| ------------------ | --------------- | ---------------------- |
-| Store in DB        | Simple          | Very expensive         |
-| Store in S3        | Scalable        | Extra complexity       |
-| Server-side upload | Easy validation | Backend bottleneck     |
-| Direct upload      | Scalable        | More client complexity |
-
----
-
-# 28. End-to-End Final Flow
+# 34. End-to-End Internal Workflow
 
 ```text
-1. User selects file
-2. Client splits into chunks
-3. Backend creates upload session
-4. Backend returns presigned URLs
-5. Client uploads chunks directly to S3
-6. Client retries failed chunks
+1. Client initiates upload
+2. Upload session created
+3. File split into chunks
+4. Chunks uploaded in parallel
+5. Redis tracks uploaded chunks
+6. Failed chunks retried
 7. Client requests completion
 8. S3 merges chunks
-9. Metadata stored in DB
+9. Metadata updated
 10. CDN serves downloads
 ```
 
 ---
 
-# 29. Real-World Technologies
+# 35. Final Interview Summary
 
-## Storage
-
-* Amazon S3
-* GCS
-* Azure Blob
-
-## Queue
-
-* Kafka
-* RabbitMQ
-* SQS
-
-## DB
-
-* PostgreSQL
-* MySQL
-
-## Cache
-
-* Redis
-
-## CDN
-
-* CloudFront
-* Cloudflare
-
----
-
-# 30. Most Important Interview Points
-
-If interviewer asks "design file upload system", ALWAYS discuss:
-
-1. Chunk upload
-2. Resume support
-3. Parallel uploads
-4. Presigned URLs
-5. Object storage
-6. Metadata DB
-7. Redis progress tracking
-8. CDN download optimization
-9. Virus scanning
-10. Scalability
-
-These are the core interview expectations.
-
----
-
-# 31. 2-Minute Interview Summary
-
-"For large file upload systems, we split files into chunks and upload them independently, usually directly to object storage like S3 using presigned URLs. Upload progress and chunk metadata are tracked in Redis/DB. Failed chunks are retried individually, enabling resume functionality. The upload service remains stateless and horizontally scalable. Final files are merged using storage-native multipart APIs, and downloads are served through CDN for low latency."
+"The LLD contains UploadController, UploadService, StorageService, Redis tracking, SQL metadata tables, and S3 multipart storage. Files are split into chunks and uploaded independently, enabling retries, resume support, and parallel uploads. Services remain stateless while Redis and DB maintain upload state. Final assembly is delegated to S3 multipart completion APIs for scalability and efficiency."
