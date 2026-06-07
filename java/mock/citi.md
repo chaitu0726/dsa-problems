@@ -15,15 +15,422 @@
 
 ### Coding Problems (solve independently — no answer keys)
 
-**Q1 🟡** Given a list of transactions, find all duplicate transaction IDs and return them sorted. Use Java Streams.
+# Q1. Find Duplicate Transaction IDs using Java Streams
 
-**Q2 🟡** Implement a rate limiter using a sliding window algorithm in Java. Make it thread-safe using concurrent utilities.
+### Input
+```java
+List<String> transactions = List.of(
+    "TXN1", "TXN2", "TXN3", "TXN1", "TXN4", "TXN2"
+);
+```
 
-**Q3 🟡** Given a binary tree, return the level-order traversal as a list of lists (BFS).
+### Solution
+```java
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-**Q4 🔴** Given an array of stock prices, find the maximum profit from at most two non-overlapping buy-sell transactions.
+public class Main {
+    public static void main(String[] args) {
 
-**Q5 🟢** Flatten a nested list of integers using Java Streams (`flatMap`).
+        List<String> transactions = List.of(
+                "TXN1", "TXN2", "TXN3",
+                "TXN1", "TXN4", "TXN2"
+        );
+
+        List<String> duplicates =
+                transactions.stream()
+                        .collect(Collectors.groupingBy(
+                                Function.identity(),
+                                Collectors.counting()
+                        ))
+                        .entrySet()
+                        .stream()
+                        .filter(entry -> entry.getValue() > 1)
+                        .map(Map.Entry::getKey)
+                        .sorted()
+                        .toList();
+
+        System.out.println(duplicates);
+    }
+}
+```
+
+### Time Complexity
+- O(n log n) (sorting)
+
+### Space Complexity
+- O(n)
+
+---
+
+# Q2. Thread-Safe Sliding Window Rate Limiter
+
+### Problem
+Allow at most `maxRequests` within last `windowSizeMillis`.
+
+### Intuition
+
+For every user:
+
+1. Store timestamps of requests.
+2. Remove expired timestamps.
+3. If remaining count < limit → allow request.
+4. Else reject.
+
+### Solution
+
+```java
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+
+public class SlidingWindowRateLimiter {
+
+    private final long windowSizeMillis;
+    private final int maxRequests;
+
+    private final ConcurrentHashMap<String,
+            ConcurrentLinkedDeque<Long>> userRequests = new ConcurrentHashMap<>();
+
+    public SlidingWindowRateLimiter(
+            long windowSizeMillis,
+            int maxRequests) {
+
+        this.windowSizeMillis = windowSizeMillis;
+        this.maxRequests = maxRequests;
+    }
+
+    public boolean allowRequest(String userId) {
+
+        long now = System.currentTimeMillis();
+
+        ConcurrentLinkedDeque<Long> timestamps =
+                userRequests.computeIfAbsent(
+                        userId,
+                        k -> new ConcurrentLinkedDeque<>()
+                );
+
+        synchronized (timestamps) {
+
+            while (!timestamps.isEmpty()
+                    && now - timestamps.peekFirst() >= windowSizeMillis) {
+
+                timestamps.pollFirst();
+            }
+
+            if (timestamps.size() >= maxRequests) {
+                return false;
+            }
+
+            timestamps.addLast(now);
+            return true;
+        }
+    }
+}
+```
+
+### Time Complexity
+- O(k) cleanup where k = expired requests
+- Amortized O(1)
+
+### Space Complexity
+- O(active requests)
+
+### Interview Follow-Ups
+
+- Fixed Window Limiter
+- Token Bucket
+- Leaky Bucket
+- Distributed Rate Limiter using Redis Sorted Set
+
+---
+
+# Q3. Binary Tree Level Order Traversal (BFS)
+
+### Intuition
+
+Process tree level by level.
+
+Queue always contains nodes of current level.
+
+### Solution
+
+```java
+import java.util.*;
+
+class TreeNode {
+    int val;
+    TreeNode left;
+    TreeNode right;
+
+    TreeNode(int val) {
+        this.val = val;
+    }
+}
+
+class Solution {
+
+    public List<List<Integer>> levelOrder(TreeNode root) {
+
+        List<List<Integer>> result = new ArrayList<>();
+
+        if (root == null) {
+            return result;
+        }
+
+        Queue<TreeNode> queue = new LinkedList<>();
+        queue.offer(root);
+
+        while (!queue.isEmpty()) {
+
+            int size = queue.size();
+
+            List<Integer> level = new ArrayList<>();
+
+            for (int i = 0; i < size; i++) {
+
+                TreeNode node = queue.poll();
+
+                level.add(node.val);
+
+                if (node.left != null) {
+                    queue.offer(node.left);
+                }
+
+                if (node.right != null) {
+                    queue.offer(node.right);
+                }
+            }
+
+            result.add(level);
+        }
+
+        return result;
+    }
+}
+```
+
+### Time Complexity
+- O(n)
+
+### Space Complexity
+- O(width of tree)
+
+---
+
+# Q4. Maximum Profit with At Most Two Transactions
+
+### Intuition
+
+For every day:
+
+- leftProfit[i] = best profit from day 0 → i
+- rightProfit[i] = best profit from i → n-1
+
+Then combine:
+
+```text
+leftProfit[i] + rightProfit[i]
+```
+
+### Example
+
+```text
+Prices:
+3 3 5 0 0 3 1 4
+
+Transaction 1:
+Buy = 0
+Sell = 3
+Profit = 3
+
+Transaction 2:
+Buy = 1
+Sell = 4
+Profit = 3
+
+Total = 6
+```
+
+### Solution
+
+```java
+class Solution {
+
+    public int maxProfit(int[] prices) {
+
+        int n = prices.length;
+
+        int[] leftProfit = new int[n];
+        int[] rightProfit = new int[n];
+
+        int minPrice = prices[0];
+
+        for (int i = 1; i < n; i++) {
+
+            minPrice = Math.min(minPrice, prices[i]);
+
+            leftProfit[i] =
+                    Math.max(
+                            leftProfit[i - 1],
+                            prices[i] - minPrice
+                    );
+        }
+
+        int maxPrice = prices[n - 1];
+
+        for (int i = n - 2; i >= 0; i--) {
+
+            maxPrice = Math.max(maxPrice, prices[i]);
+
+            rightProfit[i] =
+                    Math.max(
+                            rightProfit[i + 1],
+                            maxPrice - prices[i]
+                    );
+        }
+
+        int answer = 0;
+
+        for (int i = 0; i < n; i++) {
+
+            answer = Math.max(
+                    answer,
+                    leftProfit[i] + rightProfit[i]
+            );
+        }
+
+        return answer;
+    }
+}
+```
+
+### Time Complexity
+- O(n)
+
+### Space Complexity
+- O(n)
+
+### Interview Optimization (O(1) Space)
+
+```java
+class Solution {
+
+    public int maxProfit(int[] prices) {
+
+        int buy1 = Integer.MIN_VALUE;
+        int sell1 = 0;
+
+        int buy2 = Integer.MIN_VALUE;
+        int sell2 = 0;
+
+        for (int price : prices) {
+
+            buy1 = Math.max(buy1, -price);
+
+            sell1 = Math.max(
+                    sell1,
+                    buy1 + price
+            );
+
+            buy2 = Math.max(
+                    buy2,
+                    sell1 - price
+            );
+
+            sell2 = Math.max(
+                    sell2,
+                    buy2 + price
+            );
+        }
+
+        return sell2;
+    }
+}
+```
+
+### State Meaning
+
+```text
+buy1  = max money after first buy
+sell1 = max money after first sell
+
+buy2  = max money after second buy
+sell2 = max money after second sell
+```
+
+---
+
+# Q5. Flatten Nested List using flatMap
+
+### Input
+
+```java
+[
+ [1,2,3],
+ [4,5],
+ [6,7,8]
+]
+```
+
+### Output
+
+```java
+[1,2,3,4,5,6,7,8]
+```
+
+### Solution
+
+```java
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class Main {
+
+    public static void main(String[] args) {
+
+        List<List<Integer>> nested = List.of(
+                List.of(1, 2, 3),
+                List.of(4, 5),
+                List.of(6, 7, 8)
+        );
+
+        List<Integer> result =
+                nested.stream()
+                        .flatMap(List::stream)
+                        .collect(Collectors.toList());
+
+        System.out.println(result);
+    }
+}
+```
+
+### How flatMap Works
+
+```text
+Before:
+
+[
+ [1,2,3],
+ [4,5],
+ [6,7,8]
+]
+
+After map():
+Stream<Stream<Integer>>
+
+After flatMap():
+Stream<Integer>
+
+Result:
+[1,2,3,4,5,6,7,8]
+```
+
+### Time Complexity
+- O(total elements)
+
+### Space Complexity
+- O(total elements)
 
 ---
 
