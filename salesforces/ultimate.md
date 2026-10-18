@@ -1,15 +1,36 @@
-# PD1 Complete Reference: what each thing CAN and CAN'T do
+# Salesforce Platform Developer I — Complete Study & Sandbox Workbook
 
-**Purpose:** the real questions are twisted, not hard. They test edge rules ("does this run once or per method?", "can a formula field be written?"). This file lists, per feature, **what it can do, what it can't, how often it runs, and the gotchas**, then gives **experiments** (run → change one line → see the error → fix).
+> **Purpose:** One module-wise reference for Platform Developer I preparation, with concise rules, exam traps, practical sandbox assignments, and Apex snippets to run. Use this as a working workbook: read a topic, complete the lab, record the result, then revise the trap list.
+>
+> **Accuracy note:** Snippets and expected outcomes are study guidance, not executed in your org. Salesforce releases and org configuration can change behavior; verify uncertain details in your sandbox and current Salesforce documentation. Never run destructive or high-volume experiments in production.
 
-**Honest notes**
-- I cannot run Apex or Salesforce here. The expected results below come from documented behavior and well-known error messages. **Run every experiment in a sandbox and trust what you see over what I wrote.** Where I'm less sure, I mark **(verify)**.
-- "Every minute detail" is impossible. This covers what the exam tends to twist. Pair it with `PD1_Numbers_Cheatsheet.md` (limits) and `PD1_Master_Cheatsheet.md` (comparisons).
-- Part 2 (experiments) starts at the heading **PART 2**.
+## How to use this workbook
+
+1. Work in a **Developer Edition org or sandbox**, not production.
+2. Create a dedicated test Account/Contact naming prefix such as `PD1-Lab`.
+3. Run Apex snippets in **Developer Console → Debug → Open Execute Anonymous Window** or VS Code with Salesforce CLI.
+4. For Flow/LWC labs, create a separate component/flow per exercise and activate only when ready.
+5. Keep a lab log: **hypothesis → steps → observed result → explanation**.
+6. Do not paste all snippets at once; run each independently and check logs.
+
+## Module map
+
+1. Data model, declarative tools, and security
+2. Apex fundamentals and object-oriented programming (practical)
+3. Apex language reference, triggers, and test framework
+4. Trigger lab and bulk processing
+5. SOQL, SOSL, DML, and asynchronous Apex
+6. Flow, callouts, and integrations
+7. LWC, Aura, Visualforce, deployment, and debugging
+8. Test strategy and final capstone
+
+## Suggested sandbox data
+
+Use a few test Accounts and Contacts. Keep all lab-created records identifiable by `Name` or `Description` containing `PD1-Lab`. For trigger tests that create records, use bulk lists and avoid loops containing SOQL or DML.
 
 ---
 
-# PART 1: REFERENCE
+# Module 1 — Salesforce data model, declarative tools, and security
 
 ## 1. Field types (all of them)
 
@@ -100,450 +121,60 @@
 
 A class that declares its own sharing keyword **uses it regardless of caller**. A class with **no keyword inherits** from the caller (and runs without sharing as an entry point, except `inherited sharing` which defaults to with sharing). Triggers have no sharing keyword; the classes they call apply it.
 
-## 5. Apex language details
 
-**Primitives:** Integer (32-bit), Long (64-bit), Double, Decimal, String, Boolean, Date, Datetime, Time, Id, Blob, Object. **Every uninitialized variable is `null`**, including Boolean.
+# Module 2 — Apex fundamentals and object-oriented programming
 
-| Rule | Detail |
-|---|---|
-| `==` on strings | **Case-insensitive** (`'abc' == 'ABC'` is true). `equals()` is case-sensitive; `equalsIgnoreCase()` ignores case |
-| Map/Set with String keys | **Case-sensitive** (`'a'` ≠ `'A'`) |
-| SOQL `=` and `LIKE` on text | **Case-insensitive** |
-| Id comparison | 15- and 18-char forms of the same Id are equal |
-| `null` in math or `if (nullBoolean)` | `NullPointerException` (use `?.`, `??`, `== true`) |
-| `List.get(i)` out of range | `ListException: List index out of bounds` |
-| Collections | Passed **by reference**: `b = a;` shares the list. Copy with `new List<X>(a)` or `a.clone()` (both **shallow**); `deepClone()` for sObject lists |
-| Modify a list during `for (x : list)` | `FinalException: Cannot modify a collection while it is being iterated` |
-| `Set.add()` | Returns `false` if the value already exists |
-| `Map.put()` | Returns the previous value (or null) |
-| `Map.get(missing)` | `null` |
-| `switch on` | Works on Integer, Long, String, Enum, sObject; `when 'A','B'`, `when else` |
-| Ternary | `x != null ? x : 'default'` |
-| Safe navigation | `a?.b?.c` returns null instead of throwing |
-| Coalesce | `a ?? b` |
-| Constants | `static final` (assigned once, only at declaration or in static initializer) |
-| Static variable | Lasts **one transaction**; shared across all instances; shared across trigger chunks |
-| Instance variable | One per object |
-| Access modifiers | `private` (default for members), `protected`, `public`, `global` (visible across namespaces). Top-level classes must be `public` or `global` |
-| Class modifiers | `virtual` (can extend), `abstract` (can have abstract methods, cannot instantiate), `with/without/inherited sharing` |
-| Method override | Parent `virtual`/`abstract`; child uses `override`; call parent with `super` |
-| Interface | Signatures only; a class can implement **many**; extends **one** class |
-| Constructors | Overloading allowed; no return type; `this(...)` chains constructors |
-| Properties | `public String x { get; private set; }` read-only outside; `{ get { ... } }` computed |
-| SObject not queried field | `SObjectException: SObject row was retrieved via SOQL without querying the requested field` |
-| Update with only some fields set | Only those fields are written |
-| `Id` null before insert; set after | After `insert acc;`, `acc.Id` is populated |
-| Custom exception | `public class X extends Exception {}`; name ends with `Exception` |
-| Catch order | Specific before generic; `finally` always runs |
-| `LimitException` | **Uncatchable**; whole transaction rolls back |
-| Date math | Use `addDays`, `addMonths`, `daysBetween` |
-| Dynamic | `Schema.SObjectType`, `sObj.get('Field')`, `Database.query(string)`, `Type.forName('Cls')` |
+Use these exercises alongside the Apex language reference in Module 3.
 
-**Annotations**
+## Lab 2.1 — Execute Anonymous: primitives and collections
 
-| Annotation | CAN | CAN'T |
-|---|---|---|
-| `@isTest` | Mark class/method test; test code doesn't count toward org code limit | Be called from non-test code |
-| `@testSetup` | See Section 14 | |
-| `@TestVisible` | Expose private members to tests | – |
-| `@future` | Static void, primitive/collection-of-primitive params, `callout=true` | Return values, take sObjects, chain, run from another future/batch |
-| `@InvocableMethod` | Be used in Flow; one per class; static; **List** parameter | Have more than one per class |
-| `@InvocableVariable` | Group inputs in a wrapper class | – |
-| `@AuraEnabled` | Expose to LWC/Aura; `cacheable=true` for `@wire` | Perform DML when `cacheable=true` |
-| `@RemoteAction` | Static method callable from Visualforce JavaScript | Be non-static |
-| `@RestResource`, `@HttpGet/@HttpPost…` | Expose Apex REST | – |
-| `@ReadOnly` | Raise query limits for read-only reports/remote actions | Do DML |
-| `@Deprecated` | Mark for managed packages | – |
+Run in Execute Anonymous:
 
-## 6. Triggers: can / can't per event
+```apex
+System.debug('abc' == 'ABC');
+System.debug('abc'.equals('ABC'));
 
-| Event | `new` | `old` | `newMap` | `oldMap` | CAN | CAN'T |
-|---|---|---|---|---|---|---|
-| before insert | ✔ editable | ✘ | ✘ | ✘ | Set fields, `addError`, query | Use `Id` (null), use `newMap` |
-| before update | ✔ editable | ✔ | ✔ | ✔ | Compare old/new, set fields, `addError` | – |
-| before delete | ✘ | ✔ | ✘ | ✔ | `addError` on **old** records to block delete | Edit records |
-| after insert | ✔ **read-only** | ✘ | ✔ | ✘ | Use `Id`, create related records | Edit `Trigger.new` directly (`FinalException`) |
-| after update | ✔ read-only | ✔ | ✔ | ✔ | Update other records | Edit `Trigger.new`; recursion without a guard |
-| after delete | ✘ | ✔ | ✘ | ✔ | Clean up related data | `addError` to block |
-| after undelete | ✔ read-only | ✘ | ✔ | ✘ | Rebuild related data | Exist as *before* undelete |
+List<Integer> numbers = new List<Integer>{1, 2, 2, 3};
+Set<Integer> uniqueNumbers = new Set<Integer>(numbers);
+Map<String, Integer> scores = new Map<String, Integer>{'Asha' => 10};
 
-- A trigger runs per chunk of **up to 200** records; **limits are shared across all chunks** of the transaction.
-- `addError` on a record in a bulk save fails **that record** (partial) when `allOrNone=false`; with plain DML it fails the **whole** statement.
-- Triggers fire from UI, API, Apex DML, flows, Data Loader, cascade deletes (children).
-- `Trigger.isExecuting`, `isBefore`, `isAfter`, `isInsert`, `isUpdate`, `isDelete`, `isUndelete`, `operationType` (enum).
-- **Handler pattern:** one trigger per object, logic in a class. **Recursion:** use a static `Set<Id>` (a static Boolean blocks later chunks).
-- A trigger in a **before** context can edit only the triggering records; edits to **other** records need DML.
+System.debug('list=' + numbers.size());       // 4
+System.debug('set=' + uniqueNumbers.size()); // 3
+System.debug(scores.get('missing'));         // null
+System.debug(scores.put('Asha', 12));        // previous value: 10
+```
 
-**Order of execution (full):**
-1. Load record / system validation (required fields, types, formats)
-2. **Before-save record-triggered flows**
-3. **Before triggers**
-4. System validation again + **custom validation rules**
-5. **Duplicate rules**
-6. Save to database (not committed)
-7. **After triggers**
-8. Assignment rules, auto-response rules, **workflow rules** (field updates re-run before/after **update** triggers once)
-9. Escalation rules
-10. **After-save record-triggered flows** (and other automation)
-11. Roll-up summary (and cross-object) recalculation; parent may fire its own triggers
-12. **Commit**
-13. Post-commit: emails, async Apex (future/queueable/batch), platform events after commit
+**Assignment:** Change the list to include `null`; test `contains`, `clone`, and map key case sensitivity. Write down which collection best fits each use case: ordered duplicates, uniqueness, or key-to-value lookup.
 
-## 7. SOQL, SOSL, DML: can / can't
+## Lab 2.2 — Query and update safely
 
-**SOQL**
+```apex
+List<Account> accts = [
+    SELECT Id, Name, Industry
+    FROM Account
+    WHERE Name LIKE 'PD1-Lab%'
+    LIMIT 20
+];
 
-| Topic | Rule |
-|---|---|
-| `SELECT *` | **Not allowed.** `FIELDS(STANDARD)` allowed; `FIELDS(ALL)`/`CUSTOM` need `LIMIT 200` or less (verify) |
-| JOIN | **None.** Use relationships |
-| Child → parent | Dot path up to **5 levels** (`Contact.Account.Owner.Manager.Name`) |
-| Parent → child | Subquery with plural relationship name; **filter/order inside the subquery** |
-| Custom relationship | `Parent__r.Field__c` (`__r`); standard parent is singular (`Account.Name`) |
-| Aggregates | `COUNT()`, `COUNT(field)` (**ignores nulls**), `COUNT_DISTINCT`, `SUM`, `AVG`, `MIN`, `MAX`; result type `AggregateResult`; unaliased columns are `expr0`, `expr1` |
-| Non-aggregated field with aggregate | **Error unless in GROUP BY** |
-| `HAVING` vs `WHERE` | HAVING filters aggregates; WHERE filters rows before grouping |
-| `ROLLUP` / `CUBE` | Subtotals in GROUP BY |
-| `ORDER BY` | `ASC`/`DESC`, `NULLS FIRST/LAST` |
-| `LIMIT` / `OFFSET` | `OFFSET` max **2,000** |
-| Long Text Area / Rich Text / Encrypted | **Not allowed in WHERE / ORDER BY / GROUP BY** |
-| `LIKE` | `%` any chars, `_` one char, case-insensitive |
-| Date literals | `TODAY`, `LAST_N_DAYS:7`, `NEXT_QUARTER`, `THIS_MONTH` (no parentheses) |
-| `NULL` | `WHERE Field = null` |
-| Multi-select picklist | `INCLUDES('a;b')`, `EXCLUDES(...)` |
-| Polymorphic | `What.Type = 'Account'`, `TYPEOF What WHEN Account THEN Name END` |
-| Semi-join | `WHERE Id IN (SELECT AccountId FROM Opportunity ...)` |
-| Anti-join | `WHERE Id NOT IN (SELECT ...)` |
-| `ALL ROWS` | Include deleted (and archived Task/Event) |
-| `FOR UPDATE` | Locks the rows until the transaction ends; not with aggregate queries |
-| `FOR VIEW` / `FOR REFERENCE` | Update `LastViewedDate` / `LastReferencedDate` |
-| `WITH SECURITY_ENFORCED`, `WITH USER_MODE` | FLS/CRUD enforcement (throws) |
-| Bind variables | `:var`, works with sObjects, collections, and dynamic SOQL (`Database.query`; `Database.queryWithBinds` for explicit maps) |
-| Results | `List<SObject>`; single assignment needs exactly **1** row (**0 or >1 = `QueryException`**); `COUNT()` returns Integer |
-| SOQL for loop | `for (Account a : [SELECT ...])` fetches **200 at a time** (heap-friendly) but **still counts rows against 50,000** |
+for (Account a : accts) {
+    System.debug(a.Name + ' | ' + a.Industry);
+}
+```
 
-**SOSL**
+**Assignment:** Create two test Accounts through the UI, run the query, then update one field using a sparse sObject:
 
-| Topic | Rule |
-|---|---|
-| Syntax | `FIND 'term*' IN ALL FIELDS RETURNING Account(Id, Name WHERE ...), Contact(...)` |
-| Scope options | `ALL FIELDS`, `NAME FIELDS`, `EMAIL FIELDS`, `PHONE FIELDS`, `SIDEBAR FIELDS` |
-| Searches | Text, email, phone fields only (**not** numbers, dates) |
-| Wildcards | `*` and `?`; at least 2 characters |
-| Returns | `List<List<SObject>>` in RETURNING order |
-| Limits | 20 queries, **2,000** rows per query |
-| Tests | Returns **empty** unless you call `Test.setFixedSearchResults` |
-| Freshness | New records are indexed with a short delay |
+```apex
+Account patch = new Account(Id = 'REPLACE_WITH_REAL_ACCOUNT_ID', Rating = 'Hot');
+update patch;
+```
 
-**DML**
+Replace the placeholder with an actual Account Id. Observe that fields not assigned in `patch` are not overwritten. Do not use a fabricated Id.
 
-| Statement | CAN | CAN'T / gotchas |
-|---|---|---|
-| `insert` | Insert list; Id populated after | Pass records with Id; exceed 10,000 rows |
-| `update` | Update by Id | Update without Id; write read-only (formula, auto-number, rollup) fields |
-| `upsert` | Match on **Id or External ID**; insert or update | Contain **duplicate external IDs** in one call (error) |
-| `delete` | To Recycle Bin (15 days) | Delete without Id |
-| `undelete` | Restore from bin (query `ALL ROWS` for Ids) | Restore hard-deleted records |
-| `merge` | **Leads, Contacts, Accounts** only, up to **3** records at once | Merge other objects |
-| `Database.*(list, false)` | Partial success; `SaveResult`/`UpsertResult`/`DeleteResult` | Know failed Ids reliably (use list index) |
-| `Database.DMLOptions` | `assignmentRuleHeader.useDefaultRule`, `allowFieldTruncation`, `duplicateRuleHeader.allowSave` | – |
-| `Database.convertLead` | Convert leads in Apex | – |
-| Savepoint | `Database.setSavepoint()` / `Database.rollback(sp)` | Roll back callouts, emails, or async jobs already queued (they are not rolled back); Ids of rolled-back inserts stay on the object but are invalid |
-| Setup + non-setup DML | – | **MIXED_DML_OPERATION** in one transaction (User/Group etc. + normal objects). Fix: async or `System.runAs` in tests |
+## Lab 2.3 — OOP mini-exercise
 
-## 8. Async Apex: can / can't / how many
+Create an Apex class `PD1DiscountCalculator` with a public method that accepts a `Decimal` price and returns the price after a 10% discount. Add a second method that accepts a discount percentage. Validate null and negative inputs. Then create a test class with positive, zero, null, and invalid-input cases.
 
-| | `@future` | Queueable | Batch | Schedulable |
-|---|---|---|---|---|
-| Params | primitives, collections of primitives | any serializable (sObjects, custom classes) | constructor | – |
-| Returns | nothing | job Id | job Id | job Id |
-| Callouts | `@future(callout=true)` | `implements Database.AllowsCallouts` | `Database.AllowsCallouts` | not directly; start async |
-| Chain | **no** | **yes (one child per execute)** | `finish()` can start another batch | start batch/queueable from `execute` |
-| From trigger | yes | yes | yes | – |
-| From future/batch | **no (future from future/batch not allowed)** | **max 1 enqueue** | `executeBatch` allowed in `finish` | – |
-| Per transaction | **50** calls | **50** enqueues (sync), **1** (async) | – | 100 scheduled jobs at once |
-| Order guaranteed | **no** | per chain | per chunk | at cron time |
-| Limits | async limits (SOQL 200, heap 12 MB, CPU 60 s) | same | **fresh limits per `execute()`**, scope default 200, max 2,000 | – |
-| Records | few | medium | up to **50 million** (QueryLocator) | – |
-| State | none | member variables | `Database.Stateful` keeps instance variables across chunks (otherwise reset every `execute`) | none |
-| Special | cannot be called from VF getters/setters/constructors | `System.attachFinalizer(...)` runs after job, success or fail | Status **Holding** = flex queue (up to 100 jobs); 5 running at a time | cron `sec min hour dayOfMonth month dayOfWeek [year]`; unique job names |
-| In tests | runs at `stopTest` | runs at `stopTest`; **chaining not executed** (`Maximum stack depth` if chained in tests) | **one `execute()` chunk** | runs at `stopTest` |
-
-Rules to remember: async work runs **after commit**; a failed async job does **not** roll back the original transaction; each async job is its own transaction with fresh limits; one `execute()` failing fails only that chunk.
-
-## 9. Flow: can / can't
-
-| Item | Rule |
-|---|---|
-| **Before-save** record-triggered | Update the **triggering record** with no DML; cannot create or delete other records; fastest |
-| **After-save** record-triggered | Create/update other records, emails, actions, Apex actions; the triggering record's fields need an Update Records element |
-| **Run when** | Created / updated / created or updated / deleted. Option **"Only when a record is updated to meet the condition requirements"** stops repeat runs |
-| **Scheduled path / async path** | Run later or in a separate transaction (callouts need async) |
-| **Scheduled-triggered flow** | Runs on a schedule on matching records |
-| **Screen flow** | User interaction; can use LWCs; can't run without a user |
-| **Autolaunched flow** | No trigger; called by Apex/other flows/processes; supports subflows |
-| **Platform event-triggered flow** | Reacts to events |
-| **Bulkification** | Record-triggered flows run per batch (up to 200 records) and are bulkified automatically **if you keep DML/queries out of loops** |
-| **Limits** | Same governor limits as Apex in the same transaction (SOQL 100, DML 150); **flows and triggers share them** |
-| **Fault connector** | Handles element errors; without one, the flow fails and rolls back the transaction |
-| **Invocable Apex** | `@InvocableMethod` static, **one per class**, `List` parameter, bulk-safe, wrapper class with `@InvocableVariable` for multi-field inputs |
-| **Versions** | One active version at a time; older versions kept |
-| **Retired** | Workflow rules and Process Builder are retired/end of support; use Flow |
-| **Run mode** | Record-triggered flows run in system context by default (flow screens run in user context) |
-
-## 10. Integration: can / can't
-
-| Item | Rule |
-|---|---|
-| Callouts | 100 per transaction; each up to 120 s; **cumulative 120 s per transaction**; 6 MB (sync) / 12 MB (async) request/response |
-| Trigger callouts | **Not synchronous.** Use `@future(callout=true)`/Queueable |
-| DML before callout | `You have uncommitted work pending...` Callout first or separate transactions |
-| Authorization | **Named Credential** (stores auth + endpoint, `callout:Name/path`) or **Remote Site Setting** (URL only) |
-| Classes | `Http`, `HttpRequest` (`setMethod`, `setEndpoint`, `setHeader`, `setBody`, `setTimeout(ms)`), `HttpResponse` (`getStatusCode`, `getBody`) |
-| JSON | `JSON.serialize`, `JSON.deserialize(str, Type)`, `JSON.deserializeUntyped` |
-| Expose REST | `@RestResource(urlMapping='/Name/*')` + `@HttpGet/@HttpPost/@HttpPut/@HttpPatch/@HttpDelete` |
-| SOAP | Consume via **WSDL2Apex**; expose with `webservice` keyword on a `global` class |
-| Platform events | API name ends `__e`; publish with `EventBus.publish()` (or DML insert); subscribe via Apex trigger (`after insert`), Flow, LWC; **not queryable**; publish behavior can be "publish immediately" or "after commit" |
-| Change Data Capture | Change events for record changes; subscribe like platform events |
-| Email | `Messaging.sendEmail`: 10 invocations per transaction; limits per day; **no real email in tests** (`Limits.getEmailInvocations()`) |
-| Mixed concerns | Callouts can't run in Queueable/Batch unless `Database.AllowsCallouts`/`callout=true` |
-
-# PD1 Deep Dive, Part 4: LWC, Aura, Visualforce, Deployment, Debugging
-
-All "Expected" outcomes are **from my knowledge, not run in an org**. LWC and Visualforce errors vary by release; check the browser console and the Developer Console.
-
----
-
-## 1. Lightning Web Components
-
-### Decorators and reactivity
-| Item | Can | Can't |
-|---|---|---|
-| `@api` property | Be set by the parent; be public; use a **setter** to react to each change | Be mutated by the child that receives it (values from the parent are **read-only**; clone first) |
-| `@api` method | Be called by the parent via `this.template.querySelector('c-child').method()` | Be called from an unrelated component |
-| `@track` | Observe changes **inside** objects/arrays | Be needed for primitives (fields are already reactive) |
-| `@wire` | Run automatically; reactive when parameters use `$prop`; return `{ data, error }` | Run DML; run when a **reactive parameter is `undefined`** (it waits) |
-
-### Template rules
-| Rule | Detail |
-|---|---|
-| Expressions | **None**: use a property or **getter** (`lwc:if={isWon}`) |
-| Loops | `for:each={items} for:item="item"` and a unique **`key`** on the first element inside |
-| Conditionals | `lwc:if`, `lwc:elseif`, `lwc:else` (older: `if:true`/`if:false`) |
-| One root | Exactly one `<template>` root |
-| Attribute names | camelCase property `recordId` is set as **`record-id`** |
-| Data attributes | `data-id="x"` is read as `event.currentTarget.dataset.id` |
-| DOM queries | `this.template.querySelector(...)` (shadow DOM); `this.refs.name` with `lwc:ref="name"` |
-| Slots | `<slot>` default; named slots `<slot name="header">` and `slot="header"` in the parent |
-
-### Lifecycle order
-`constructor` → `connectedCallback` → `render` → `renderedCallback`. For parent and child:
-1. Parent constructor → parent `connectedCallback`
-2. Child constructor → child `connectedCallback` → child `renderedCallback`
-3. Parent `renderedCallback`
-
-`disconnectedCallback` runs on removal (**clean up timers and listeners**). `errorCallback` catches errors from **child** components. In `connectedCallback` the template isn't rendered, so `this.template.querySelector(...)` returns null.
-
-### Apex from LWC
-| | `@wire` | Imperative |
-|---|---|---|
-| Needs | `@AuraEnabled(cacheable=true)`, `static` | `@AuraEnabled`, `static` (cacheable optional) |
-| DML | **No** | **Yes** |
-| Trigger | Automatic, reactive | Your call; returns a **promise** |
-| Refresh | `refreshApex(this.wiredResult)` | Call again |
-| Data | Immutable; clone before sorting/pushing | – |
-
-- Show a friendly error with `throw new AuraHandledException('msg')`.
-- Methods may accept primitives, sObjects, collections and Apex classes with `@AuraEnabled` fields.
-
-### Lightning Data Service (no Apex)
-| Component / adapter | Use |
-|---|---|
-| `lightning-record-form` | Quick view/edit/readonly (`mode`) with a default layout |
-| `lightning-record-view-form` + `lightning-output-field` | Read-only custom layout |
-| `lightning-record-edit-form` + `lightning-input-field` | Custom edit layout; `onsubmit` + `event.preventDefault()` + `submit(fields)` to change fields |
-| `getRecord`, `getFieldValue` | Reactive record data |
-| `createRecord`, `updateRecord`, `deleteRecord` | Imperative DML via LDS |
-| `getObjectInfo`, `getPicklistValues` | Labels and picklists (record-type aware) |
-| `lightning-file-upload` (with `record-id`) | Attach files without Apex |
-
-LDS enforces **FLS and sharing** and shares a cache across components, so an `updateRecord` in one component updates another that shows the same record.
-
-### Events
-| Direction | How |
-|---|---|
-| Parent → child | `@api` property or method |
-| Child → parent | `this.dispatchEvent(new CustomEvent('selectitem', { detail }))`; parent: `onselectitem={handler}` (lowercase name, no spaces) |
-| Event options | `bubbles` (default false), `composed` (default false) |
-| Unrelated components | **Lightning Message Service** (also works with Aura and Visualforce): subscribe in `connectedCallback`, **unsubscribe in `disconnectedCallback`** |
-
-| `bubbles` | `composed` | Reaches |
-|---|---|---|
-| false | false | Only the direct parent's handler on the element |
-| true | false | Ancestors within the **same shadow tree** |
-| true | true | **Across shadow boundaries** to any ancestor (use sparingly; relaying is cleaner) |
-
-### Meta XML and targets
-`isExposed` **true** plus `<targets>`: `lightning__RecordPage`, `lightning__AppPage`, `lightning__HomePage`, `lightning__Tab`, **`lightning__RecordAction`** (quick action), **`lightning__FlowScreen`**, `lightning__UtilityBar`, **`lightningCommunity__Page`** (Experience). `<targetConfig>` holds properties and `<objects>` to limit a record page to certain objects. Record pages inject `@api recordId` and `@api objectApiName`. Flow outputs use **`FlowAttributeChangeEvent`**.
-
-### Other
-| Topic | Rule |
-|---|---|
-| Imports | Apex `@salesforce/apex/Cls.method`; schema `@salesforce/schema/Account.Name`; label `@salesforce/label/c.My_Label`; static resource `@salesforce/resourceUrl/name`; user `@salesforce/user/Id` |
-| Toast | `ShowToastEvent` from `lightning/platformShowToastEvent` |
-| Navigation | `NavigationMixin` (`Navigate`, `GenerateUrl`) |
-| Security | Lightning Web Security (Locker is the older model) |
-| Jest | Unit tests; mock Apex with `jest.mock('@salesforce/apex/...', ..., { virtual: true })`; `await Promise.resolve()` to wait for rerender |
-| Nesting | LWC can sit **inside** Aura; Aura can't sit inside LWC |
-| Shared code | A JS-only module imported as `c/utils` |
-
-### Try it: LWC (change one line, observe)
-| # | Change | Expected |
-|---|---|---|
-| 1 | Remove `cacheable=true` from the Apex method used by `@wire` | Wire error: method must be cacheable |
-| 2 | Add `this.items.push('x')` to a child with `@api items` | Error: cannot add property; object not extensible (read-only) |
-| 3 | Remove `key={acc.Id}` in a `for:each` | Template compile error: iterated element needs a key |
-| 4 | Write `lwc:if={stage === 'Won'}` | Template compile error: expressions not allowed |
-| 5 | Dispatch `new CustomEvent('selectItem')` and use `onselectitem` | Handler never fires (name must match lowercase) |
-| 6 | Use `onselectitem` on a grandchild's event without `bubbles`/`composed` | Grandparent doesn't receive it |
-| 7 | Query `this.template.querySelector('input')` in `connectedCallback` | `null` (not rendered yet) |
-| 8 | Pass `undefined` to a `@wire` reactive parameter | Wire doesn't fire until it has a value |
-| 9 | Set `isExposed` to false | Component doesn't appear in App Builder |
-| 10 | Add `@api recordId` on a component placed on a record page | `recordId` is filled in automatically |
-
----
-
-## 2. Aura
-
-| Topic | Rule |
-|---|---|
-| Binding | `{!v.attr}` = **bound** (updates flow both ways); `{#v.attr}` = **unbound** (one-time) |
-| Calling Apex | `var a = component.get("c.method"); a.setCallback(this, function(r){ r.getState(); ... }); $A.enqueueAction(a);` Action states: `SUCCESS`, `ERROR`, `INCOMPLETE` |
-| Events | **Component event**: handled by the parent hierarchy. **Application event**: handled by **any** component |
-| `aura:method` | Exposes a method callable by a parent |
-| `aura:handler name="init"` | Runs code on load |
-| LDS | `force:recordData` |
-| Interfaces | `flexipage:availableForAllPageTypes`, `force:hasRecordId`, `force:lightningQuickAction`, `lightning:isUrlAddressable` |
-| Interop | Aura can contain LWC and listen to its `CustomEvent`s |
-| Files | Controller (handles events), Helper (shared logic), Renderer, Style |
-
----
-
-## 3. Visualforce
-
-### Controllers
-| Type | Declared as | Extension constructor takes |
-|---|---|---|
-| Standard (single record) | `standardController="Account"` | `ApexPages.StandardController` |
-| Standard **list** | add `recordSetVar="accts"` | **`ApexPages.StandardSetController`** |
-| Custom | `controller="MyClass"` | – |
-| Extension | `extensions="MyExt"` | As above |
-
-| Rule | Detail |
-|---|---|
-| Getters | `{!acc}` calls `getAcc()` |
-| Fields loaded | Standard controllers load **only fields referenced on the page**; add others with `addFields()` |
-| `apex:form` | Required for `commandButton`/`commandLink`/inputs |
-| `rerender` | Needs a target that **exists in the DOM** (`rendered="false"` components don't); rerender a parent container |
-| `action` on `apex:page` | Runs on load; may return a `PageReference` to redirect |
-| Return `null` | Stay on the page and keep view state |
-| `PageReference` + `setRedirect(true)` | New request, **view state lost** |
-| View state | Limit **170 KB**; use `transient` for variables that aren't needed after the request |
-| `readOnly="true"` | Raises the SOQL row limit for report-style pages |
-| JavaScript | `apex:actionFunction`, `@RemoteAction` static methods |
-| Messages | `ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR,'msg'))` and `<apex:pageMessages/>` |
-| URL params | `ApexPages.currentPage().getParameters().get('id')` |
-| Merge fields | `{!$User.Id}`, `{!$CurrentPage.parameters.id}` |
-| Components | `apex:pageBlockTable` (styled), `apex:dataTable`, `apex:repeat` (custom markup), `apex:inputField` (adapts to field type), `apex:outputField` |
-| Embed Lightning | `apex:includeLightning` |
-
-### Try it: Visualforce
-| # | Change | Expected |
-|---|---|---|
-| 1 | Remove `<apex:form>` around a `commandButton` | Error: commandButton must be inside a form |
-| 2 | Extension for a list controller uses `ApexPages.StandardController` in its constructor | Page error: no matching constructor; use `StandardSetController` |
-| 3 | `rerender="panel"` where `panel` has `rendered="false"` | Nothing updates; wrap it in an always-rendered container |
-| 4 | Store a 3,000-element list in a non-transient field | View state grows (check the View State tab); make it `transient` |
-| 5 | Use `{!acc.Name}` without `getAcc()` | Error: unknown property |
-| 6 | Return `null` from an action vs a new `PageReference` | `null` stays on the page; `PageReference` navigates |
-
----
-
-## 4. Environments, packages, deployment
-
-### Sandboxes
-| Type | Data | Storage | Refresh |
-|---|---|---|---|
-| **Developer** | Metadata only | 200 MB data | 1 day |
-| **Developer Pro** | Metadata only | 1 GB data | 1 day |
-| **Partial Copy** | Metadata + sample data via a **template** | 5 GB data (verify) | 5 days |
-| **Full** | **All** data and metadata (like production) | Same as production | **29 days** |
-
-- Templates work only with **Partial and Full**.
-- After a refresh, **email deliverability is "System email only"**.
-- A refresh **overwrites** the sandbox. Back up or deploy unsaved work first.
-- **Scratch org:** temporary (1–30 days, default 7), created from a **Dev Hub** using `project-scratch-def.json`.
-- **Apex can't be edited directly in production**; develop in a sandbox/scratch and deploy.
-
-### Packages
-| Type | Upgradeable | Notes |
-|---|---|---|
-| Unmanaged | **No** | Copy of components |
-| Managed | Yes | Namespace, IP protection, AppExchange |
-| Unlocked | Yes | Your own modular metadata, dependencies, optional namespace |
-
-### Tools
-| Tool | Can | Can't |
-|---|---|---|
-| **Change sets** | Move metadata between **connected** orgs (production and its sandboxes) | Delete components; work between unrelated orgs; track versions |
-| **Salesforce CLI (`sf`)** | Source-driven, repeatable, version control, scratch orgs | – |
-| **Metadata API / `package.xml`** | Retrieve/deploy; **`destructiveChanges.xml`** deletes; `checkOnly` validates | – |
-| **DevOps Center** | Work items, pipeline, source control | – |
-
-**Test levels:** `NoTestRun` (**not allowed for production with Apex**), `RunSpecifiedTests`, `RunLocalTests` (default for production with Apex; **excludes managed package tests**), `RunAllTestsInOrg`.
-**Quick Deploy:** available for about **10 days** after a successful validation, without re-running tests.
-**Coverage:** ≥ 75% overall, every trigger has some coverage, all tests pass.
-
-### Key CLI
-`sf org login web` · `sf org list` · `sf org open` · `sf org create scratch --definition-file ... --duration-days 3` · `sf project deploy start` (`--dry-run` validates) · `sf project retrieve start` · `sf apex run test --code-coverage --class-names MyTest` · `sf package create --package-type Unlocked`. Files: `sfdx-project.json`, `.forceignore`, `package.xml`.
-
-### Try it
-| # | Do | Expected |
-|---|---|---|
-| 1 | Add a class to `package.xml` with `<members>*</members>` for `ApexClass` | All classes retrieved |
-| 2 | Deploy to production with `NoTestRun` and Apex included | Rejected |
-| 3 | Validate, wait 11 days, Quick Deploy | Validation expired; validate again |
-| 4 | Send an outbound change set to an unconnected org | Not possible; no deployment connection |
-| 5 | Add a file path to `.forceignore` and deploy | That file is skipped |
-
----
-
-## 5. Debugging
-
-| Item | Rule |
-|---|---|
-| Trace flag | Needed per user; has an expiry; sets the **debug level** |
-| Levels (low → high) | `ERROR`, `WARN`, `INFO`, **`DEBUG`** (default for `System.debug`), `FINE`, `FINER`, `FINEST` |
-| Categories | Apex Code, **Database** (SOQL/DML), Callout, Workflow, Validation, System, Visualforce |
-| `System.debug(LoggingLevel.ERROR, msg)` | Logs at the chosen level |
-| Limits | `Limits.getQueries()` (used) and `Limits.getLimitQueries()` (allowed); log ends with **LIMIT_USAGE_FOR_NS** |
-| Tools | Developer Console (logs, **Query Editor**, **Execute Anonymous**, **Checkpoints** for heap, **Query Plan** for SOQL index use), **Apex Replay Debugger** (VS Code), **Apex Jobs**, **Deployment Status** |
-| Raise detail | Increase Database and Apex Code levels |
-| Async jobs | Check **Apex Jobs**; batch **Holding** = flex queue |
-| Logs for another user | Create a trace flag for **that** user |
-
----
-
-## 6. Final recall (Part 4)
-- LWC: no template expressions; `key` on loops; `@api` data is read-only; `@wire` needs cacheable; `connectedCallback` has no DOM.
-- Events: lowercase name, `on`+name, `bubbles`+`composed` to cross shadow boundaries.
-- Aura: `{!}` bound, `{#}` unbound; application event = any component.
-- VF: list extension = `StandardSetController`; `rerender` needs a rendered target; `transient` cuts view state.
-- Dev sandbox metadata only; Partial = template + 5 days; Full = 29 days; templates for Partial/Full.
-- Change sets can't delete; CLI + scratch orgs for source-driven; `NoTestRun` is not allowed for production Apex.
-- Quick Deploy ≈ 10 days; `RunLocalTests` excludes managed package tests.
-
-# PD1 Deep Dive, Part 2: Apex Language, Triggers, Test Framework
+# Module 3 — Apex language, triggers, and testing (reference)
 
 Every "Expected" result is **from my knowledge, not run in an org**. Run each snippet in Execute Anonymous (or as a test) and trust your org if wording differs.
 
@@ -767,7 +398,38 @@ private class SetupTest {
 4. Wrap async in `startTest/stopTest`, assert after `stopTest`.
 5. Assert real outcomes, not just coverage.
 
-# PD1 Deep Dive, Part 3: SOQL, SOSL, DML, Async Apex, Flow, Callouts
+# Module 4 — Trigger lab and bulk record processing
+
+## Lab 3.1 — Before trigger: default a field
+
+Create an Account trigger in Setup → Apex Triggers or VS Code:
+
+```apex
+trigger PD1AccountDefaults on Account (before insert) {
+    for (Account a : Trigger.new) {
+        if (a.Description == null) {
+            a.Description = 'PD1-Lab defaulted by before trigger';
+        }
+    }
+}
+```
+
+**Try it**
+1. Insert an Account without Description and inspect the saved value.
+2. Insert an Account with a Description and confirm it is preserved.
+3. Explain why no extra `update` DML is required in a before trigger.
+
+## Lab 3.2 — Bulk-safe validation
+
+Create a before-insert/before-update trigger that blocks Accounts whose Name starts with `PD1-BLOCK`. Use `addError` on the record. Test one record and a list of 200 records; then compare `insert records` with `Database.insert(records, false)`.
+
+## Lab 3.3 — Bulkification challenge
+
+Write a trigger handler that, after Contacts are inserted, collects their AccountIds into a Set, queries the related Accounts **once**, and writes a debug line for each Account. Do not put SOQL or DML inside a loop.
+
+**Assignment:** Submit 200 Contacts in one operation. Confirm the trigger works for all records and remains within governor limits. Add a static `Set<Id>` guard only if your design actually needs recursion protection; avoid a blanket static Boolean that skips later trigger chunks.
+
+# Module 5 — SOQL, SOSL, DML, and asynchronous Apex (reference)
 
 All "Expected" outcomes are **from my knowledge, not run in an org**. Error text may differ slightly; verify marked items against the docs.
 
@@ -979,7 +641,44 @@ public class LabCallout {
 - Long text can't be filtered. `HAVING` for aggregates. Anti-join: `NOT IN (SELECT ...)`.
 - SOQL for loop saves heap, not rows.
 
-# PD1 Deep Dive, Part 4: LWC, Aura, Visualforce, Deployment, Debugging
+# Module 6 — Flow, callouts, and integrations
+
+## Lab 5.1 — Record-triggered Flow
+
+**Business requirement:** When an Account is created or updated with `Type = Prospect` and `NumberOfEmployees > 500`, set a custom checkbox `Needs_Review__c` to true.
+
+1. Create the checkbox field on Account.
+2. Setup → Flows → New Flow → **Record-Triggered Flow**.
+3. Object: Account; trigger on create or update; entry conditions as above.
+4. Choose **Fast Field Updates / before-save** because only the triggering record is changed.
+5. Add an Assignment setting `$Record.Needs_Review__c = True`.
+6. Save, debug, activate, and test with matching and non-matching Accounts.
+
+**Follow-up assignment:** Change the requirement so a related Task is created. Decide why this needs an after-save flow and use Create Records. Add a fault path where appropriate.
+
+## Lab 5.2 — Scheduled path
+
+Create a Date field `Subscription_Expiry__c` on a suitable test object. Build a record-triggered Flow with a scheduled path one month before expiry (where supported by the selected date/time field and flow configuration). Test dates carefully; consider null expiry dates and records updated after scheduling.
+
+## Lab 5.3 — Approval process
+
+Create an Account approval process for prospect Accounts with more than 500 employees. Configure:
+- Entry criteria
+- Initial submission action (for example, set a review status)
+- Approver assignment
+- Final approval action
+- Final rejection action
+- Record locking and email alert if available
+
+Submit a test record and verify each outcome. Note that the exact wizard labels may vary; use the standard Setup approval-process configuration when the jump-start wizard does not offer the desired object.
+
+## Lab 5.4 — Mock a callout (advanced)
+
+Create an Apex service that sends an HTTP GET request to a configurable endpoint through a Named Credential. Add an `HttpCalloutMock` test so the test does not call the real endpoint. Keep secrets in a Named Credential, never in source code.
+
+**Assignment:** Explain why synchronous callouts directly from a trigger are not allowed, and compare Queueable Apex implementing `Database.AllowsCallouts` with `@future(callout=true)`.
+
+# Module 7 — LWC, Aura, Visualforce, deployment, and debugging
 
 All "Expected" outcomes are **from my knowledge, not run in an org**. LWC and Visualforce errors vary by release; check the browser console and the Developer Console.
 
@@ -1213,3 +912,76 @@ LDS enforces **FLS and sharing** and shares a cache across components, so an `up
 - Dev sandbox metadata only; Partial = template + 5 days; Full = 29 days; templates for Partial/Full.
 - Change sets can't delete; CLI + scratch orgs for source-driven; `NoTestRun` is not allowed for production Apex.
 - Quick Deploy ≈ 10 days; `RunLocalTests` excludes managed package tests.
+
+# Module 8 — Test strategy and final capstone
+
+## Test class starter
+
+```apex
+@isTest
+private class PD1AccountDefaultsTest {
+    @isTest
+    static void defaultsDescriptionWhenMissing() {
+        Account a = new Account(Name = 'PD1-Lab Test Account');
+        Test.startTest();
+        insert a;
+        Test.stopTest();
+
+        Account saved = [
+            SELECT Description
+            FROM Account
+            WHERE Id = :a.Id
+        ];
+        System.assertEquals(
+            'PD1-Lab defaulted by before trigger',
+            saved.Description
+        );
+    }
+}
+```
+
+If you use the trigger from Module 3, this test should verify its behavior. Adjust the expected value to match your implementation.
+
+## Test assignments
+
+- Add a test for a Description that is already populated.
+- Test bulk input (at least 200 records).
+- Test negative paths, including `addError`.
+- Use `@testSetup` for shared test data when it improves clarity.
+- Mock every callout.
+- Enqueue asynchronous work between `Test.startTest()` and `Test.stopTest()`, then assert the outcome after `stopTest()`.
+- Never hard-code record IDs. Avoid `SeeAllData=true` unless a specific case requires it.
+- Assert business outcomes, not only code coverage.
+
+## Capstone: Prospect review automation
+
+Build a small end-to-end solution in your sandbox:
+1. Account fields: `Needs_Review__c`, `Review_Status__c`, and optionally `Subscription_Expiry__c`.
+2. Before-save Flow to default fields on the triggering Account.
+3. Validation rule preventing an invalid status combination.
+4. Apex trigger or handler for one clearly justified requirement that Flow does not handle better.
+5. A bulk-safe test class covering positive, negative, and 200-record cases.
+6. An after-save Flow that creates a related Task when review is required.
+7. Optional approval process for review decisions.
+8. Optional LWC that displays Accounts needing review, using Lightning Data Service or a cacheable Apex read method.
+9. Deploy the metadata to a second sandbox or validate a deployment through Salesforce CLI/change sets.
+10. Write a short README explaining data model, security, automation order, test cases, and trade-offs.
+
+## Final revision checklist
+
+- [ ] I can distinguish lookup, master-detail, junction objects, formula, and roll-up summary fields.
+- [ ] I can explain OWD, role hierarchy, sharing rules, profiles, permission sets, CRUD, and FLS.
+- [ ] I can write bulk-safe Apex using List, Set, Map, and sparse updates.
+- [ ] I know trigger context variables and before-vs-after restrictions.
+- [ ] I can write SOQL relationship queries, aggregates, semi-joins, and SOSL searches.
+- [ ] I know partial-success DML and how to inspect result objects.
+- [ ] I can choose Queueable, Batch, Scheduled Apex, or Future appropriately.
+- [ ] I can choose before-save vs after-save Flow and use fault paths.
+- [ ] I can test asynchronous work and mock HTTP callouts.
+- [ ] I understand LWC reactivity, lifecycle, events, LDS, and Apex wire vs imperative calls.
+- [ ] I can explain Aura/Visualforce fundamentals and modern alternatives.
+- [ ] I can debug logs and describe deployment/test requirements.
+
+## Important note about limits
+
+This workbook contains selected limit values and edge rules, not a complete substitute for the separate governor-limit cheat sheet. Confirm exam-critical numbers against current Salesforce documentation and the version of the exam guide you are using.
